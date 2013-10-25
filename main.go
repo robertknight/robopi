@@ -177,6 +177,11 @@ func handleCommand(cmds []string, state *botState, reply func(msg string)) {
 	}
 }
 
+type botMessage struct {
+	event irc.Event
+	commands []string
+}
+
 func main() {
 	arm, err := robotarm.Open()
 	if err != nil {
@@ -210,27 +215,43 @@ func main() {
 		dances:      map[string][]robotarm.Move{},
 	}
 
+	botMessages := make(chan botMessage)
+	quitChan := make(chan bool)
 	conn.AddCallback("PRIVMSG", func(e *irc.Event) {
-		replyFunc := func(msg string) {
-			conn.Privmsg(e.Nick, msg)
-		}
-
 		nickStr := "robopi:"
 		cmdIndex := strings.Index(e.Message, nickStr)
 		if cmdIndex != -1 {
 			cmdStr := e.Message[cmdIndex+len(nickStr):]
 			cmds := strings.Fields(cmdStr)
-			handleCommand(cmds, &state, replyFunc)
+			botMessages <-botMessage{
+				event: *e,
+				commands: cmds,
+			}
 		}
 	})
 
-	input := bufio.NewScanner(os.Stdin)
-	for input.Scan() {
-		line := input.Text()
-		replyFunc := func(msg string) {
-			fmt.Println("reply: " + msg)
+	go func() {
+		input := bufio.NewScanner(os.Stdin)
+		for input.Scan() {
+			line := input.Text()
+			cmds := strings.Fields(line)
+			botMessages <-botMessage{
+				event:irc.Event{},
+				commands:cmds,
+			}
 		}
-		cmds := strings.Fields(line)
-		handleCommand(cmds, &state, replyFunc)
+		quitChan<-true
+	}()
+
+	for {
+		select {
+		case message := <-botMessages:
+			replyFunc := func(msg string) {
+				conn.Privmsg(message.event.Nick, msg)
+			}
+			handleCommand(message.commands, &state, replyFunc)
+		case <-quitChan:
+			break
+		}
 	}
 }

@@ -7,15 +7,15 @@ An IRC bot that controls a Maplin Robotic Arm
 Usage
 -----
 
-`
+```
 ./robopi [-secure] <host[:port]>
-`
+```
 
 On IRC, address the bot with 'robopi: <command>'.
 
 Commands:
 
-`
+```
 move <body part> <direction> <duration>
 	Add a move to the current dance or execute a move
 	if not currently learning a dance
@@ -31,7 +31,7 @@ dance <dance name>
 
 forget <dance name>
 	Forget a saved dance
-`
+```
 
 Why?
 ----

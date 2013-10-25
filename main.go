@@ -27,34 +27,17 @@ var moveMap = map[string]robotarm.MoveType{
 	"elbow/down":    robotarm.ElbowDown,
 }
 
-func setupIrc(server string, secure bool) (*irc.Connection, error) {
-	conn := irc.IRC("robopi", "robopi")
-	conn.UseTLS = secure
-	err := conn.Connect(server)
-	if err != nil {
-		fmt.Println("Failed to connect: " + err.Error())
-		return conn, err
-	}
-
-	loggedIn := false
+func addLoginHandlers(conn *irc.Connection) {
 	conn.AddCallback("PRIVMSG", func(e *irc.Event) {
 		fmt.Println("PRIVMSG: " + e.Message)
 	})
 	conn.AddCallback("NOTICE", func(e *irc.Event) {
-		if !loggedIn && strings.Contains(e.Message, "This nickname is registered") {
+		if strings.Contains(e.Message, "This nickname is registered") {
 			conn.Privmsg("NickServ", "IDENTIFY robopi pi")
 			conn.Join("#robopi")
-			loggedIn = true
 		}
 		fmt.Println("NOTICE: " + e.Message)
 	})
-
-	go func() {
-		e := <-conn.Error
-		fmt.Println("IRC error: " + e.Error())
-	}()
-
-	return conn, nil
 }
 
 func parseDanceMove(bodyPart string, direction string, duration float64) (robotarm.Move, error) {
@@ -218,11 +201,14 @@ func main() {
 	}
 	fmt.Println("Joining " + server)
 
-	conn, err := setupIrc(server, *secureFlag)
-	if err != nil {
-		fmt.Println("Unable to connect to " + server)
-		os.Exit(1)
-	}
+	conn := irc.IRC("robopi", "robopi")
+	conn.UseTLS = *secureFlag
+	addLoginHandlers(conn)
+
+	go func(errChan chan error) {
+		e := <-errChan
+		fmt.Println("IRC error: " + e.Error())
+	}(conn.Error)
 
 	state := botState{
 		conn:        conn,
@@ -245,6 +231,12 @@ func main() {
 			}
 		}
 	})
+
+	err = conn.Connect(server)
+	if err != nil {
+		fmt.Printf("Unable to connect to %v: %v\n", server, err.Error())
+		os.Exit(1)
+	}
 
 	go func() {
 		input := bufio.NewScanner(os.Stdin)

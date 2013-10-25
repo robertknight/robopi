@@ -71,11 +71,23 @@ func parseDanceMove(bodyPart string, direction string, duration float64) (robota
 	}, nil
 }
 
+type ArmMover interface {
+	Move(moves []robotarm.Move) (error)
+}
+
 type botState struct {
 	conn        *irc.Connection
-	arm         robotarm.Arm
+	arm         ArmMover
 	currentMove string
 	dances      map[string][]robotarm.Move
+}
+
+type fakeArm struct {
+}
+
+func (*fakeArm) Move(moves []robotarm.Move)(error) {
+	fmt.Println("Executing fake arm move")
+	return nil
 }
 
 func handleCommand(cmds []string, state *botState, reply func(msg string)) {
@@ -183,9 +195,13 @@ type botMessage struct {
 }
 
 func main() {
-	arm, err := robotarm.Open()
+	var arm ArmMover
+	realArm, err := robotarm.Open()
 	if err != nil {
-		panic("Unable to setup robot arm")
+		fmt.Println("Unable to setup robot arm. Using a fake arm instead.")
+		arm = &fakeArm{}
+	} else {
+		arm = &realArm
 	}
 
 	secureFlag := flag.Bool("secure", false, "Use a secure connection")
